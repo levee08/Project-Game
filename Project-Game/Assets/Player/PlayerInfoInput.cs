@@ -4,6 +4,7 @@ using UnityEngine;
 using UnityEngine.UI;
 using UnityEngine.Windows;
 using TMPro;
+using UnityEngine.SceneManagement;
 
 public class PlayerInfoInput : MonoBehaviour
 {
@@ -18,6 +19,11 @@ public class PlayerInfoInput : MonoBehaviour
         DataManager.Instance.playerData.CustomID = int.Parse(customInput.text);
 
         Debug.Log("Player Info Saved: " + DataManager.Instance.playerData.PlayerName + ", " + DataManager.Instance.playerData.PlayerAge + ", " + DataManager.Instance.playerData.CustomID);
+    }
+    public void StartGame()
+    {
+        Debug.Log("MainGame scene called.");
+        SceneManager.LoadScene(SceneManager.GetActiveScene().buildIndex + 1);
     }
 
 }

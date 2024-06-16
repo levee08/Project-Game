@@ -1,5 +1,6 @@
 using System.Collections;
 using System.Collections.Generic;
+using Unity.VisualScripting;
 using UnityEngine;
 
 public class PlayerController : MonoBehaviour
@@ -9,6 +10,15 @@ public class PlayerController : MonoBehaviour
     public float gridSize;
     private bool isMoving;
     private Vector2 input;
+    private Animator animator;
+    private SpriteRenderer spriteRenderer;
+    public LayerMask solidObjectsLayer;
+
+    private void Awake()
+    {
+       animator = GetComponent<Animator>();
+         spriteRenderer = GetComponent<SpriteRenderer>();
+    }
 
     private void Update()
     {
@@ -17,14 +27,37 @@ public class PlayerController : MonoBehaviour
             input.x = Input.GetAxisRaw("Horizontal");
             input.y = Input.GetAxisRaw("Vertical");
 
+           
+            Debug.Log("input.x:" + input.x);
+            Debug.Log("input.y:" + input.y);
+
             if (input != Vector2.zero)
             {
+                animator.SetFloat("moveX", input.x);
+                animator.SetFloat("moveY", input.y);
+                if (input.x < 0)
+                {
+                    spriteRenderer.flipX = true;
+                    animator.SetBool("isFlipped", true);
+                }
+                else if (input.x > 0)
+                {
+                    spriteRenderer.flipX = false;
+                    animator.SetBool("isFlipped", false);
+                }
+
                 var targetPos=transform.position;
                 targetPos.x += input.x*gridSize;
                 targetPos.y += input.y*gridSize;
-                StartCoroutine(Move(targetPos));
+
+                if(isWalkable(targetPos))
+                {
+                    StartCoroutine(Move(targetPos));
+                }
+               
             }
         }
+        animator.SetBool("isMoving", isMoving);
     }
 
     IEnumerator Move(Vector3 targetPos)
@@ -39,6 +72,14 @@ public class PlayerController : MonoBehaviour
         isMoving = false;
     }
 
+    private bool isWalkable(Vector3 targetPos)
+    {
+        if(Physics2D.OverlapCircle(targetPos,0.2f,solidObjectsLayer)!=null)
+        {
+            return false;
+        }
+        return true;
+    }
 
 
 }
