@@ -1,0 +1,13 @@
+fileFormatVersion: 2
+guid: 28e1d8b643c83974dabe102491bb7f4b
+MonoImporter:
+  externalObjects: {}
+  serializedVersion: 2
+  defaultReferences:
+  - sudokuGridParent: {instanceID: 0}
+  - cellPrefab: {instanceID: 0}
+  executionOrder: 0
+  icon: {instanceID: 0}
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 

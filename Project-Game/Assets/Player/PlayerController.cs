@@ -13,7 +13,7 @@ public class PlayerController : MonoBehaviour
     private Animator animator;
     private SpriteRenderer spriteRenderer;
     public LayerMask solidObjectsLayer;
-
+    public LayerMask interactableLayer;
     private void Awake()
     {
        animator = GetComponent<Animator>();
@@ -28,8 +28,8 @@ public class PlayerController : MonoBehaviour
             input.y = Input.GetAxisRaw("Vertical");
 
            
-            Debug.Log("input.x:" + input.x);
-            Debug.Log("input.y:" + input.y);
+            //Debug.Log("input.x:" + input.x);
+            //Debug.Log("input.y:" + input.y);
 
             if (input != Vector2.zero)
             {
@@ -74,7 +74,7 @@ public class PlayerController : MonoBehaviour
 
     private bool isWalkable(Vector3 targetPos)
     {
-        if(Physics2D.OverlapCircle(targetPos,0.2f,solidObjectsLayer)!=null)
+        if(Physics2D.OverlapCircle(targetPos,0.2f,solidObjectsLayer | interactableLayer)!=null)
         {
             return false;
         }

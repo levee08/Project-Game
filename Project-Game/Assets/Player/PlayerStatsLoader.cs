@@ -5,8 +5,8 @@ using TMPro;
 
 public class PlayerStatsLoader : MonoBehaviour
 {
-    public GameObject playerStatsContent;
-    public GameObject rowPrefab;
+    public RectTransform playerStatsContent;
+    public RectTransform rowPrefab;
 
     void Start()
     {
@@ -54,15 +54,23 @@ public class PlayerStatsLoader : MonoBehaviour
 
                 if (!string.IsNullOrEmpty(playerName) && !string.IsNullOrEmpty(playerScore))
                 {
-                    GameObject newRow = Instantiate(rowPrefab, playerStatsContent.transform);
+                    // Sor létrehozása
+                    GameObject newRow = Instantiate(rowPrefab.gameObject, playerStatsContent.transform);
                     newRow.SetActive(true);
 
-                    
+                    // Szövegek frissítése
                     TextMeshProUGUI nameText = newRow.transform.Find("Canvas/Név").GetComponent<TextMeshProUGUI>();
                     TextMeshProUGUI scoreText = newRow.transform.Find("Canvas/Pontszám").GetComponent<TextMeshProUGUI>();
 
-                    nameText.text = playerName;
-                    scoreText.text = playerScore;
+                    if (nameText != null) nameText.text = playerName;
+                    if (scoreText != null) scoreText.text = playerScore;
+
+                    // RowClickHandler inicializálása
+                    RowClickHandler rowHandler = newRow.GetComponent<RowClickHandler>();
+                    if (rowHandler != null)
+                    {
+                        rowHandler.Initialize(playerName, playerScore, "CustomID");
+                    }
                 }
             }
         }
