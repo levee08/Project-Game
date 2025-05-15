@@ -1,147 +1,278 @@
-using Gravitons.UI.Modal;
-using System.Collections;
+﻿using System.Collections;
 using System.Collections.Generic;
-using Unity.VisualScripting;
 using UnityEngine;
-using UnityEngine.SceneManagement;
 using UnityEngine.UI;
+using UnityEngine.EventSystems;
+using UnityEngine.SceneManagement;
+using Gravitons.UI.Modal;
+using CognitiveGames.Scoring;      // Difficulty, GameSettings, GameMetrics
 
-public class GameController : MonoBehaviour
+public class PuzzleGameController : MonoBehaviour
 {
-    [SerializeField]
-    private Sprite bgImage;
-    public List<Button> btns = new List<Button>();
+    /*─────────────  INSPECTOR  ─────────────*/
+    [Header("UI-Prefabs")]
+    [SerializeField] private Sprite bgImage;        // hátlap
+    [SerializeField] private Button cardPrefab;     // PuzzleButton prefab
+    [SerializeField] private GridLayoutGroup grid;           // Puzzle Field
 
-    public Sprite[] puzzles;
-    public List<Sprite> gamePuzzles = new List<Sprite>();
+    [Header("Kártya-sprite-készlet (≥10)")]
+    [SerializeField] private Sprite[] puzzles;
+
+    /*─────────────  BELSŐ  ────────────────*/
+    private readonly List<Button> btns = new();
+    private readonly List<Sprite> gamePuzzles = new();
 
     private bool firstGuess, secondGuess;
-    private int countGuesses;
-    private int countCorrectGuesses;
-    private int gameGuesses;
+    private int firstIdx, secondIdx;
+    private string firstName, secondName;
 
-    private string firstGuessPuzzle,secondGuessPuzzle;
-    private int firstGuessIndex,secondGuessIndex;
+    private int countGuesses, countCorrect;
+    private int targetPairs;           // 6 / 8 / 10
+    private int colsForDifficulty;     // 4 / 4 / 5
+    private float revealTime;            // 1.2 / 1.0 / 0.8
+
+    private float startTime;
+    private Difficulty difficulty;
+
+    /*──────────────  START  ───────────────*/
     private void Start()
     {
-        GetButtons();
+        difficulty = GameSettings.CurrentDifficulty;
+        ApplyDifficulty();
+
+        Debug.Log($"[Puzzle] Mode={difficulty} → pairs={targetPairs}, cols={colsForDifficulty}");
+
+        BuildCardButtons();
+        StartCoroutine(LayoutAfterCanvasScaler());
+
         AddListeners();
-        AddGamePuzzles();
+        FillPuzzleList();
         Shuffle(gamePuzzles);
-        gameGuesses = gamePuzzles.Count / 2;
+        startTime = Time.time;
     }
-    void GetButtons()
+
+    private IEnumerator LayoutAfterCanvasScaler()
     {
-        GameObject[] objects = GameObject.FindGameObjectsWithTag("PuzzleButton");
-        for (int i = 0; i < objects.Length; i++)
-        {
-            btns.Add(objects[i].GetComponent<Button>());
-            btns[i].image.sprite = bgImage;
-        }
+        // egy EndOfFrame után már a CanvasScaler is lefutott
+        yield return new WaitForEndOfFrame();
+        AdjustGridLayout();
+       // grid.enabled = false;  // egyszer rendezi, utána nem piszkálja
     }
 
-    void AddGamePuzzles()
+    /*──────────  NEHÉZSÉG  ˙─────────────*/
+    private void ApplyDifficulty()
     {
-        int looper = btns.Count;
-        int index = 0;
-        for ( int i = 0; i < looper; i++ )
+        switch (difficulty)
         {
-            if(index == looper / 2)
-            {
-                index = 0;
-            }
-            gamePuzzles.Add(puzzles[index]);
-            index++;
+            case Difficulty.Könnyű:
+                targetPairs = 6;
+                colsForDifficulty = 4;
+                revealTime = 1.2f;
+                break;
+
+            case Difficulty.Normál:
+                targetPairs = 6;
+                colsForDifficulty = 4;
+                revealTime = 1.0f;
+                break;
+
+            case Difficulty.Nehéz:
+                targetPairs = 10;
+                colsForDifficulty = 5;  // ← Hard → 5 oszlop
+                revealTime = 0.8f;
+                break;
         }
     }
 
-    void AddListeners()
+    /*──────────  KÁRTYA-ÉPÍTÉS  ───────────*/
+    private void BuildCardButtons()
     {
-        foreach ( Button button in btns )
+        int need = targetPairs * 2;
+        GetExistingButtons();
+
+        // régi gombok hátlapját frissítjük
+        foreach (var b in btns)
+            b.image.sprite = bgImage;
+
+        // ha kevés a gomb, újakat gyártunk
+        while (btns.Count < need)
         {
-            button.onClick.AddListener(() => PickPuzzle());
+            int idx = btns.Count;
+            Button b = Instantiate(cardPrefab, grid.transform);
+            b.name = idx.ToString();
+            b.tag = "PuzzleButton";
+            b.image.sprite = bgImage;
+            btns.Add(b);
+        }
+
+        // ha túl sok a gomb, kikapcsoljuk a fölösleget
+        for (int i = btns.Count - 1; i >= need; --i)
+        {
+            btns[i].gameObject.SetActive(false);
+            btns.RemoveAt(i);
         }
     }
-    public void PickPuzzle()
-    { 
-        
-        if(!firstGuess)
-        {
-            firstGuess = true;
-            
 
-            firstGuessIndex = int.Parse(UnityEngine.EventSystems.EventSystem.current.currentSelectedGameObject.name);
-            firstGuessPuzzle = gamePuzzles[firstGuessIndex].name;
-            btns[firstGuessIndex].image.sprite = gamePuzzles[firstGuessIndex];
-            btns[firstGuessIndex].interactable=false;
-        }
-        else if (!secondGuess)
-        {
-            secondGuess = true;
-           
-
-            secondGuessIndex = int.Parse(UnityEngine.EventSystems.EventSystem.current.currentSelectedGameObject.name);
-            secondGuessPuzzle = gamePuzzles[secondGuessIndex].name;
-            btns[secondGuessIndex].image.sprite = gamePuzzles[secondGuessIndex];
-            btns[secondGuessIndex].interactable = false;
-            StartCoroutine(CheckIfThePuzzleMatch());
-        }
-
-    }
-    IEnumerator CheckIfThePuzzleMatch()
+    private void GetExistingButtons()
     {
-        countGuesses++;
-        yield return new WaitForSeconds(1f);
-        if (firstGuessPuzzle == secondGuessPuzzle)
+        btns.Clear();
+        foreach (var go in GameObject.FindGameObjectsWithTag("PuzzleButton"))
         {
-            yield return new WaitForSeconds(1f);
-            btns[firstGuessIndex].interactable = false;
-            btns[secondGuessIndex].interactable = false;
+            if (go.activeSelf && go.TryGetComponent<Button>(out var b))
+                btns.Add(b);
+        }
+    }
 
-            btns[firstGuessIndex].image.color = new Color(0,0,0,0);
-            btns[secondGuessIndex].image.color = new Color(0, 0, 0,0);
-            CheckIfGameIsFinished();
+    /*──────────  RÁCS MÉRETEZÉSE  ──────────*/
+    private void AdjustGridLayout()
+    {
+        int total = targetPairs * 2;
+        int cols = colsForDifficulty;
+        int rows = Mathf.CeilToInt((float)total / cols);
+
+        grid.constraint = GridLayoutGroup.Constraint.FixedColumnCount;
+        grid.constraintCount = cols;
+        grid.childAlignment = TextAnchor.MiddleCenter;
+
+        RectTransform rt = grid.GetComponent<RectTransform>();
+        float availW = rt.rect.width    // pontosan a Canvas szélesség
+             - grid.spacing.x * (cols - 1);
+
+        float availH = rt.rect.height   // pontosan a Canvas magasság
+             - grid.spacing.y * (rows - 1);
+
+        const float aspect = 1f;  // magasság/szélesség arány (150/100)
+
+
+        float cardW = Mathf.Min(availW / cols,
+                                availH / rows / aspect);
+
+        if (difficulty == Difficulty.Normál || difficulty == Difficulty.Könnyű)
+        {
+            grid.cellSize = new Vector2(cardW, cardW * aspect)*0.8f;
         }
         else
         {
-            yield return new WaitForSeconds(.5f);
-            btns[firstGuessIndex].interactable = true;
-            btns[secondGuessIndex].interactable = true;
-            btns[firstGuessIndex].image.sprite = bgImage;
-            btns[secondGuessIndex].image.sprite = bgImage;
+            grid.cellSize = new Vector2(cardW, cardW * aspect)*0.8f;
         }
-        yield return new WaitForSeconds(.5f);
+        
+
+        Debug.Log($"[Puzzle] Grid: cols={cols}, rows={rows}, cell={grid.cellSize}");
+    }
+
+    /*──────────  LISTENERS  ─────────────*/
+    private void AddListeners()
+    {
+        foreach (var b in btns)
+        {
+            b.onClick.RemoveAllListeners();
+            b.onClick.AddListener(() => PickCard());
+        }
+    }
+
+    /*──────────  SPRITE-LISTA  ───────────*/
+    private void FillPuzzleList()
+    {
+        gamePuzzles.Clear();
+        int half = targetPairs;
+        int idx = 0;
+
+        for (int i = 0; i < targetPairs * 2; i++)
+        {
+            if (idx == half) idx = 0;
+            gamePuzzles.Add(puzzles[idx]);
+            idx++;
+        }
+    }
+
+    /*──────────  PICK/MATCH LOGIKA  ─────────*/
+    public void PickCard()
+    {
+        int idx = int.Parse(EventSystem.current.currentSelectedGameObject.name);
+
+        if (!firstGuess)
+        {
+            firstGuess = true;
+            firstIdx = idx;
+            firstName = gamePuzzles[idx].name;
+            Reveal(idx, true);
+        }
+        else if (!secondGuess && idx != firstIdx)
+        {
+            secondGuess = true;
+            secondIdx = idx;
+            secondName = gamePuzzles[idx].name;
+            Reveal(idx, true);
+            StartCoroutine(CheckMatch());
+        }
+    }
+
+    private IEnumerator CheckMatch()
+    {
+        countGuesses++;
+        yield return new WaitForSeconds(revealTime);
+
+        if (firstName == secondName)
+        {
+            LockMatched(firstIdx);
+            LockMatched(secondIdx);
+            countCorrect++;
+            if (countCorrect == targetPairs)
+                EndGame();
+        }
+        else
+        {
+            Reveal(firstIdx, false);
+            Reveal(secondIdx, false);
+        }
 
         firstGuess = secondGuess = false;
     }
-    void CheckIfGameIsFinished()
+
+    private void Reveal(int idx, bool show)
     {
-        countCorrectGuesses++;
-        if(countCorrectGuesses == gameGuesses)
-        {
-            Debug.Log(countGuesses);
-            ModalManager.Show("v�gezt�l",
-                $"{countGuesses}db pr�b�lkoz�sb�l",
-                new[]
-                {
-                    new ModalButton() { Text = "OK", Callback = BackToMainGame }
-                }
-            );
-        }
+        btns[idx].image.sprite = show ? gamePuzzles[idx] : bgImage;
+        btns[idx].interactable = !show;
     }
-    void Shuffle(List<Sprite> list)
+
+    private void LockMatched(int idx)
     {
-        for (int i = 0; i < list.Count; i++)
+        btns[idx].image.color = new Color(0, 0, 0, 0);
+        btns[idx].interactable = false;
+    }
+
+    /*──────────  JÁTÉK VÉGE  ─────────────*/
+    private void EndGame()
+    {
+        int mistakes = countGuesses - countCorrect;
+        float elapsed = Time.time - startTime;
+
+        var metrics = new GameMetrics("Puzzle", elapsed,
+                                      countCorrect, mistakes, difficulty);
+        
+        ScoreManager.Instance?.OnGameFinished(metrics);
+        DataManager.Instance.MarkFinished(MiniGameTrigger.CurrentMiniGameId);
+
+        ModalManager.Show(
+            "Gratulálok!",
+            $"Próbálkozások: {countGuesses}",
+            new[]
+            {
+                new ModalButton { Text = "OK", Callback = BackToMainGame }
+            }
+        );
+    }
+
+    /*──────────  HELPER  ───────────────────*/
+    private void Shuffle(List<Sprite> list)
+    {
+        for (int i = list.Count - 1; i > 0; --i)
         {
-            Sprite temp = list[i];
-            int randomIdx = Random.Range(0, list.Count);
-            list[i] = list[randomIdx];
-            list[randomIdx] = temp;
+            int j = Random.Range(0, i + 1);
+            (list[i], list[j]) = (list[j], list[i]);
         }
     }
 
-    void BackToMainGame()
-    {
-        SceneManager.LoadScene(SceneManager.GetActiveScene().buildIndex -1);
-    }
+    private void BackToMainGame() =>
+        SceneManager.LoadScene(SceneManager.GetActiveScene().buildIndex - 1);
 }

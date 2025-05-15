@@ -1,56 +1,99 @@
-﻿using Gravitons.UI.Modal;
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using System.Linq;
 using TMPro;
 using UnityEngine;
 using UnityEngine.SceneManagement;
 using UnityEngine.UI;
+using Gravitons.UI.Modal;
+using CognitiveGames.Scoring;  // ▶ ScoreManager, Difficulty, GameMetrics
 
 public class NonogramManager : MonoBehaviour
 {
-    public int gridSize = 5; // A játék tényleges mérete
-    public Transform gridParent; // A GridPanel objektum
-    public GameObject cellPrefab; // Egy kattintható cella prefab
-    public GameObject numberTextPrefab; // Szám megjelenítésére szolgáló prefab
+    // ----------------- Inspector -----------------
+    [Header("Beállítások")]
+    [SerializeField] int gridSize = 5;
+    [SerializeField] CognitiveGames.Scoring.Difficulty difficulty;
 
-    private int[,] solutionGrid; // Generált megoldás rácsa
-    private int[,] playerGrid; // Játékos aktuális megoldása
-    private List<List<int>> rowClues; // Sorok szabályai
-    private List<List<int>> columnClues; // Oszlopok szabályai
+    [Header("Prefabok / Szülő")]
+    [SerializeField] Transform gridParent;
+    [SerializeField] GameObject cellPrefab;
+    [SerializeField] GameObject numberTextPrefab;
 
-    private float startTime; // A játék indításának időpontja
-    private bool isGameOver = false; // Ellenőrzi, hogy vége van-e a játéknak
+    // ----------------- Belső mezők -----------------
+    int[,] solutionGrid;
+    int[,] playerGrid;
+    List<List<int>> rowClues;
+    List<List<int>> columnClues;
 
+    float startTime;
+    bool isGameOver;
+    int mistakeCount;
+
+    // időkorlát és hibakorlát nehézség szerint
+    float timeLimit;
+    int maxMistakesAllowed;
 
     void Start()
     {
-        GenerateRandomSolution(); // Véletlenszerű rács generálása
-        GenerateClues(); // Szabályok generálása
-        CreateGridUI(); // A teljes rács UI létrehozása
-    }
+        difficulty = GameSettings.CurrentDifficulty;
+        ApplyDifficultySettings();
 
-    /// <summary>
-    /// Véletlenszerű rács generálása
-    /// </summary>
-    void GenerateRandomSolution()
-    {
+        startTime = Time.time;
+        mistakeCount = 0;
         solutionGrid = new int[gridSize, gridSize];
         playerGrid = new int[gridSize, gridSize];
 
-        // Random rács generálása
-        for (int row = 0; row < gridSize; row++)
+        GenerateRandomSolution();
+        GenerateClues();
+        CreateGridUI();
+    }
+
+    void Update()
+    {
+        if (!isGameOver && Time.time - startTime > timeLimit)
         {
-            for (int col = 0; col < gridSize; col++)
-            {
-                // Véletlenszerű 1 vagy 0
-                solutionGrid[row, col] = Random.Range(0, 2); // 0 vagy 1
-            }
+            FailGame("Idő lejárt", $"A rendelkezésre álló {timeLimit:F0} mp lejárt.");
         }
     }
 
-    /// <summary>
-    /// Szabályok generálása a megoldás rácsa alapján
-    /// </summary>
+    // =======================================================================
+    //  Nehézség-specifikus beállítások: időkorlát és megengedett hibaszám
+    // =======================================================================
+    void ApplyDifficultySettings()
+    {
+        switch (difficulty)
+        {
+            case Difficulty.Könnyű:
+                timeLimit = 600f;    // 10 perc
+                maxMistakesAllowed = int.MaxValue;
+                break;
+            case Difficulty.Normál:
+                timeLimit = 300f;    // 5 perc
+                maxMistakesAllowed = 10;
+                break;
+            case Difficulty.Nehéz:
+                timeLimit = 120f;    // 2 perc
+                maxMistakesAllowed = 5;
+                break;
+            default:
+                timeLimit = 300f;
+                maxMistakesAllowed = 10;
+                break;
+        }
+
+        Debug.Log($"[Nonogram] Difficulty={difficulty}, timeLimit={timeLimit}s, maxMistakes={maxMistakesAllowed}");
+    }
+
+    // =======================================================================
+    //  Pályagenerálás
+    // =======================================================================
+    void GenerateRandomSolution()
+    {
+        for (int r = 0; r < gridSize; r++)
+            for (int c = 0; c < gridSize; c++)
+                solutionGrid[r, c] = Random.Range(0, 2);
+    }
+
     void GenerateClues()
     {
         rowClues = new List<List<int>>();
@@ -63,138 +106,159 @@ public class NonogramManager : MonoBehaviour
         }
     }
 
-    /// <summary>
-    /// Sor/oszlop szabályainak kiszámítása
-    /// </summary>
     List<int> ExtractClues(int[,] grid, int index, bool isRow)
     {
-        List<int> clues = new List<int>();
+        var clues = new List<int>();
         int count = 0;
-
         for (int i = 0; i < gridSize; i++)
         {
-            int value = isRow ? grid[index, i] : grid[i, index];
-            if (value == 1)
-            {
-                count++;
-            }
-            else if (count > 0)
-            {
-                clues.Add(count);
-                count = 0;
-            }
+            int val = isRow ? grid[index, i] : grid[i, index];
+            if (val == 1) count++;
+            else if (count > 0) { clues.Add(count); count = 0; }
         }
-
-        if (count > 0)
-            clues.Add(count);
-
+        if (count > 0) clues.Add(count);
         return clues.Count > 0 ? clues : new List<int> { 0 };
     }
 
-    /// <summary>
-    /// A teljes rács UI létrehozása (számokkal és kattintható cellákkal)
-    /// </summary>
+    // =======================================================================
+    //  UI-építés
+    // =======================================================================
     void CreateGridUI()
     {
         foreach (Transform child in gridParent)
-        {
             Destroy(child.gameObject);
-        }
 
-        for (int row = 0; row <= gridSize; row++)
+        for (int r = 0; r <= gridSize; r++)
         {
-            for (int col = 0; col <= gridSize; col++)
+            for (int c = 0; c <= gridSize; c++)
             {
-                if (row == 0 && col == 0)
-                {
-                    CreateEmptyCell();
-                }
-                else if (row == 0)
-                {
-                    CreateNumberCell(columnClues[col - 1]);
-                }
-                else if (col == 0)
-                {
-                    CreateNumberCell(rowClues[row - 1]);
-                }
-                else
-                {
-                    CreateClickableCell(row - 1, col - 1);
-                }
+                if (r == 0 && c == 0) CreateEmptyCorner();
+                else if (r == 0) CreateNumberCell(columnClues[c - 1]);
+                else if (c == 0) CreateNumberCell(rowClues[r - 1]);
+                else CreateClickableCell(r - 1, c - 1);
             }
         }
     }
 
     void CreateNumberCell(List<int> clues)
     {
-        GameObject numberCell = Instantiate(numberTextPrefab, gridParent);
-        TMP_Text textComponent = numberCell.GetComponentInChildren<TMP_Text>();
-        textComponent.text = string.Join(" ", clues);
+        var obj = Instantiate(numberTextPrefab, gridParent);
+        obj.GetComponentInChildren<TMP_Text>().text = string.Join(" ", clues);
+    }
+
+    void CreateEmptyCorner()
+    {
+        var obj = Instantiate(numberTextPrefab, gridParent);
+        obj.GetComponentInChildren<TMP_Text>().text = "";
     }
 
     void CreateClickableCell(int row, int col)
     {
         GameObject cell = Instantiate(cellPrefab, gridParent);
-        cell.GetComponent<Button>().onClick.AddListener(() =>
-        {
-            ToggleCell(row, col, cell);
-        });
+        cell.GetComponent<Button>().onClick.AddListener(() => ToggleCell(row, col, cell));
     }
 
-    void CreateEmptyCell()
-    {
-        GameObject emptyCell = Instantiate(numberTextPrefab, gridParent);
-        TMP_Text textComponent = emptyCell.GetComponentInChildren<TMP_Text>();
-        textComponent.text = "";
-    }
-
+    // =======================================================================
+    //  Játéklogika: kattintás, hibakorlát és megoldás-ellenőrzés
+    // =======================================================================
     void ToggleCell(int row, int col, GameObject cell)
     {
         if (isGameOver) return;
-        playerGrid[row, col] = playerGrid[row, col] == 1 ? 0 : 1;
-        cell.GetComponent<Image>().color = playerGrid[row, col] == 1 ? Color.black : Color.white;
 
-        if (ValidateSolution())
+        // állapotváltás
+        playerGrid[row, col] = 1 - playerGrid[row, col];
+        cell.GetComponent<Image>().color =
+            playerGrid[row, col] == 1 ? Color.black : Color.white;
+
+        // hibaszám növelése, ha tévedés
+        if (playerGrid[row, col] != solutionGrid[row, col])
         {
-            isGameOver = true; // Játék vége
-            float elapsedTime = Time.time - startTime;
-            int minutes = (int)(elapsedTime / 60); // Percek
-            int seconds = (int)(elapsedTime % 60); // Másodpercek
-            ModalManager.Show("Végeztél",
-               $"{minutes} perc és {seconds} másodperc idő alatt",
-               new[]
-               {
-                    new ModalButton() { Text = "OK", Callback = BackToMainGame }
-               }
-           );
-            Debug.Log("Helyes megoldás!");
+            mistakeCount++;
+
+            if (mistakeCount > maxMistakesAllowed)
+            {
+                isGameOver = true;
+
+                // ── Pontszámítás hibás végződés esetén ──
+                float elapsed = Time.time - startTime;
+                int correctCount = playerGrid.Cast<int>().Count(v => v == 1 && /* helyes */ true);
+                var metrics = new GameMetrics(
+                    "Nonogram",
+                    elapsed,
+                    correctCount,
+                    mistakeCount,
+                    difficulty
+                );
+                ScoreManager.Instance?.OnGameFinished(metrics);
+                DataManager.Instance.MarkFinished(MiniGameTrigger.CurrentMiniGameId);
+
+                ModalManager.Show(
+                    "Túl sok hiba",
+                    $"Több mint {maxMistakesAllowed} hibát követtél el.\nHelyes mezők: {correctCount}",
+                    new[]
+                    {
+                    new ModalButton { Text = "OK", Callback = BackToMainGame }
+                    }
+                );
+                return;
+            }
         }
+
+        // ha kész a megoldás
+        if (ValidateSolution())
+            FinishGame();
     }
+
 
     bool ValidateSolution()
     {
-        for (int row = 0; row < gridSize; row++)
-        {
-            if (!ValidateLine(playerGrid, row, rowClues[row], true))
+        for (int r = 0; r < gridSize; r++)
+            if (!ExtractClues(playerGrid, r, true).SequenceEqual(rowClues[r]))
                 return false;
-        }
 
-        for (int col = 0; col < gridSize; col++)
-        {
-            if (!ValidateLine(playerGrid, col, columnClues[col], false))
+        for (int c = 0; c < gridSize; c++)
+            if (!ExtractClues(playerGrid, c, false).SequenceEqual(columnClues[c]))
                 return false;
-        }
 
         return true;
     }
 
-    bool ValidateLine(int[,] grid, int index, List<int> clues, bool isRow)
+    // =======================================================================
+    //  Befejezés: sikeres vagy sikertelen
+    // =======================================================================
+    void FinishGame() => EndGame(success: true, title: "Gratulálok!", body: $"Megoldva {(int)((Time.time - startTime) / 60)}p {(int)((Time.time - startTime) % 60)}s alatt\nHibák: {mistakeCount}");
+
+    void FailGame(string title, string body) => EndGame(success: false, title: title, body: body);
+
+    void EndGame(bool success, string title, string body)
     {
-        List<int> extracted = ExtractClues(grid, index, isRow);
-        return extracted.SequenceEqual(clues);
+        isGameOver = true;
+        float elapsed = Time.time - startTime;
+
+        int correctCount = success ? playerGrid.Cast<int>().Count(v => v == 1) : 0;
+        int mistakes = mistakeCount;
+
+        // Pontszámítás
+        var metrics = new GameMetrics(
+            "Nonogram",
+            elapsed,
+            correctCount,
+            mistakes,
+            difficulty);
+
+        ScoreManager.Instance?.OnGameFinished(metrics);
+        DataManager.Instance.MarkFinished(MiniGameTrigger.CurrentMiniGameId);
+
+        // Modal
+        ModalManager.Show(
+            title,
+            body,
+            new[] { new ModalButton { Text = "OK", Callback = BackToMainGame } }
+        );
+
+        Debug.Log($"Nonogram vége ▶ success={success}, time={elapsed:F1}s, mistakes={mistakes}");
     }
-    void BackToMainGame()
-    {
+
+    void BackToMainGame() =>
         SceneManager.LoadScene(SceneManager.GetActiveScene().buildIndex - 3);
-    }
 }

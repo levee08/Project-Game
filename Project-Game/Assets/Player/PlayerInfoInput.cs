@@ -1,8 +1,6 @@
-﻿using System.Collections;
-using System.Collections.Generic;
+﻿using System;
 using UnityEngine;
 using UnityEngine.UI;
-using UnityEngine.Windows;
 using TMPro;
 using UnityEngine.SceneManagement;
 
@@ -10,77 +8,54 @@ public class PlayerInfoInput : MonoBehaviour
 {
     public TMP_InputField nameInput;
     public TMP_InputField ageInput;
-    public TMP_InputField customInput;
+    public TMP_InputField customInput; // ezt használod playerId-ként
 
     public void SavePlayerInfo()
     {
-        DataManager.Instance.playerData.PlayerName = nameInput.text;
-        DataManager.Instance.playerData.PlayerAge = int.Parse(ageInput.text);
-        DataManager.Instance.playerData.CustomID = int.Parse(customInput.text);
+        int pid = int.Parse(customInput.text);
+        var existing = DatabaseManager.Instance.GetPlayerByPlayerId(pid);
 
-        Debug.Log("Player Info Saved: " + DataManager.Instance.playerData.PlayerName + ", " + DataManager.Instance.playerData.PlayerAge + ", " + DataManager.Instance.playerData.CustomID);
+        PlayerRecord rec;
+        if (existing != null)
+        {
+            rec = existing;
+            rec.Name = nameInput.text;
+            rec.Age = int.Parse(ageInput.text);
+        }
+        else
+        {
+            rec = new PlayerRecord
+            {
+                PlayerId = pid,
+                Name = nameInput.text,
+                Age = int.Parse(ageInput.text)
+            };
+        }
+
+        DatabaseManager.Instance.UpsertPlayer(rec);
+
+        // Memóriába is mentsd, hogy a játék tudja, kivel megy tovább:
+        DataManager.Instance.playerData.playerId = rec.PlayerId;
+        DataManager.Instance.playerData.playerName = rec.Name;
+        DataManager.Instance.playerData.playerAge = rec.Age;
+
+        // És indítsd a játékot...
     }
+    /// <summary>
+    /// Ezt a gombnyomás‐callbacket hívd meg, amikor a játékos rányom a „Játék indítása” gombra.
+    /// </summary>
     public void StartGame()
     {
         Debug.Log("MainGame scene called.");
 
-        // Stopper indítása
-        Stopper stopper = FindObjectOfType<Stopper>();
+        // Stopper indítása, ha van
+        var stopper = FindObjectOfType<Stopper>();
         if (stopper != null)
-        {
             stopper.StartStopper();
-        }
         else
-        {
-            Debug.LogError("Stopper nem található!");
-        }
+            Debug.LogWarning("Stopper nem található!");
 
-        // Jelenet betöltése
+        // Következő jelenet
         SceneManager.LoadScene(SceneManager.GetActiveScene().buildIndex + 1);
     }
-
 }
-
-
-    // Adatok mentése az adatbázisba
-    //public void SaveToDatabase()
-    //{
-    //    Debug.Log("SaveToDatabase called!");
-    //    StartCoroutine(SendDataToDatabase());
-    //}
-
-    //private IEnumerator SendDataToDatabase()
-    //{
-    //    // Input mezők adatai
-    //    string playerName = nameInput.text;
-    //    string playerAge = ageInput.text;
-    //    string customID = customInput.text;
-
-    //    // POST kérés előkészítése
-    //    WWWForm form = new WWWForm();
-    //    form.AddField("name", playerName);
-    //    form.AddField("age", playerAge);
-    //    form.AddField("custom_id", customID);
-
-    //    // HTTP kérés küldése a szerverre
-    //    using (UnityWebRequest www = UnityWebRequest.Post("http://localhost/ProjectGame/InsertPlayer.php", form))
-    //    {
-    //        yield return www.SendWebRequest();
-
-    //        if (www.result != UnityWebRequest.Result.Success)
-    //        {
-    //            Debug.LogError("Failed to save data to database: " + www.error);
-    //        }
-    //        else
-    //        {
-    //            Debug.Log("Player Info Saved to Database: " + playerName + ", " + playerAge + ", " + customID);
-    //        }
-    //    }
-    //}
-
-    //public void StartGame()
-    //{
-    //    Debug.Log("MainGame scene called.");
-    //    SceneManager.LoadScene(SceneManager.GetActiveScene().buildIndex + 1);
-    //}
-

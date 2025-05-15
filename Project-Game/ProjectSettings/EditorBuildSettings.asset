@@ -26,4 +26,7 @@ EditorBuildSettings:
   - enabled: 1
     path: Assets/Scenes/NonogramGame.unity
     guid: 80b6cb0efe3d72946b36239839b83586
+  - enabled: 1
+    path: Assets/Scenes/Double Decision.unity
+    guid: ae6465ca873ad7940aefe54c184f5895
   m_configObjects: {}

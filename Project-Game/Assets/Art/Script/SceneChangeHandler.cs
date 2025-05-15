@@ -28,7 +28,7 @@ public class SceneChangeHandler : MonoBehaviour
             // Modal megjelenítése
             ModalManager.Show(
                 "Játék Ismertető",
-                $"Játék leirás, mit kell csinálni, mikor, pontozás, hány feledat. Stb.. Stb..",
+                $"Üdvözöllek a játékban! A feladatod az lesz, hogy a nyilak segítségével navigálj oda, az egyes karakterekhez. A kezdési pozíciódtól fentre indulj el, majd menj körbe minden egyes karakteren. A játékot a tőled jobbra található karakterhez sétálva tudod befejezni.",
                 new[] { new ModalButton() { Text = "Ok" } }
             );
         }

@@ -1,25 +1,32 @@
-﻿using System.Collections;
+﻿using UnityEngine;
 using System.Collections.Generic;
-using UnityEngine;
 
 public class DataManager : MonoBehaviour
 {
-
     public static DataManager Instance { get; private set; }
 
-    public PlayerData playerData;
+    public PlayerData playerData;                 // az egyetlen profil
 
-    private void Awake()
+    void Awake()
     {
         if (Instance == null)
         {
             Instance = this;
             DontDestroyOnLoad(gameObject);
-            playerData = new PlayerData();
+
+            playerData = new PlayerData();        // új, üres adat
         }
-        else
-        {
-            Destroy(gameObject);
-        }
+        else Destroy(gameObject);
+    }
+
+    /*────  mini-játék státusz  ────*/
+    public bool HasFinished(string gameId) =>
+        playerData.finishedMiniGames.Contains(gameId);
+
+    public void MarkFinished(string gameId)
+    {
+        if (!playerData.finishedMiniGames.Contains(gameId))
+            playerData.finishedMiniGames.Add(gameId);
+        // Nincs fájl- vagy DB-mentés, csak memóriában jegyezzük meg
     }
 }

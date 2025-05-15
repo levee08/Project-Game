@@ -1,197 +1,236 @@
-﻿using System.Collections.Generic;
-using TMPro;
+﻿using System;
+using System.Linq;
 using UnityEngine;
+using UnityEngine.UI;
+using UnityEngine.SceneManagement;
+using TMPro;
+using Gravitons.UI.Modal;
+using CognitiveGames.Scoring;  // ▶ ScoreManager, Difficulty, GameMetrics
 
 public class SudokuManager : MonoBehaviour
 {
-    public RectTransform sudokuGridParent;
-    public GameObject cellPrefab;
-    public TMP_Text errorCounterText; // Hibaszámláló megjelenítésére szolgáló UI elem
+    [Header("UI References")]
+    [SerializeField] RectTransform sudokuGridParent;
+    [SerializeField] GameObject cellPrefab;
+    [SerializeField] TMP_Text errorCounterText;
 
-    private int[,] sudokuGrid = new int[9, 9];
-    private bool[,] isGeneratedCell = new bool[9, 9]; // Az alapból generált mezők jelölésére
-    private int errorCount = 0; // Hibák számlálója
+    [Header("Gameplay")]
+    [SerializeField] Difficulty difficulty;
+
+    int[,] solutionGrid = new int[9, 9];
+    bool[,] isGeneratedCell = new bool[9, 9];
+    int errorCount;
+    float startTime;
+
+    int cluesToKeep;
 
     void Start()
     {
-        GenerateSudoku();
-        RemoveNumbers(30);
+        startTime = Time.time;
+        difficulty = GameSettings.CurrentDifficulty;
+        ApplyDifficultySettings();
+
+        GenerateFullGrid();
+        RemoveCluesWithUniqueness(81 - cluesToKeep);
         CreateSudokuUI();
-        UpdateErrorCounter(); // Kezdetben frissítjük a hibaszámláló UI-t
+        UpdateErrorCounter();
     }
 
-    private void GenerateSudoku()
+    void ApplyDifficultySettings()
     {
-        while (!FillGrid(0, 0))
+        switch (difficulty)
         {
-            Debug.LogWarning("Érvénytelen rács generálva, újrapróbálkozás...");
+            case Difficulty.Könnyű: cluesToKeep = 60; break;
+            case Difficulty.Normál: cluesToKeep = 50; break;
+            case Difficulty.Nehéz: cluesToKeep = 40; break;
+            default: cluesToKeep = 30; break;
         }
     }
 
-    private bool FillGrid(int row, int col)
+    void GenerateFullGrid()
+    {
+        Array.Clear(solutionGrid, 0, solutionGrid.Length);
+        FillGrid(0, 0);
+    }
+
+    bool FillGrid(int row, int col)
     {
         if (row == 9) return true;
+        int nr = (col == 8 ? row + 1 : row);
+        int nc = (col == 8 ? 0 : col + 1);
 
-        int nextRow = col == 8 ? row + 1 : row;
-        int nextCol = col == 8 ? 0 : col + 1;
-
-        List<int> numbers = new List<int>() { 1, 2, 3, 4, 5, 6, 7, 8, 9 };
-        Shuffle(numbers);
-
-        foreach (int number in numbers)
+        foreach (int n in Enumerable.Range(1, 9).OrderBy(_ => UnityEngine.Random.value))
         {
-            if (IsSafeToPlace(sudokuGrid, row, col, number))
+            if (IsSafeToPlace(solutionGrid, row, col, n))
             {
-                sudokuGrid[row, col] = number;
-
-                if (FillGrid(nextRow, nextCol)) return true;
-
-                sudokuGrid[row, col] = 0; // Backtrack
+                solutionGrid[row, col] = n;
+                if (FillGrid(nr, nc)) return true;
+                solutionGrid[row, col] = 0;
             }
         }
-
         return false;
     }
 
-    private bool IsSafeToPlace(int[,] grid, int row, int col, int number)
+    void RemoveCluesWithUniqueness(int toRemove)
     {
-        for (int i = 0; i < 9; i++)
+        var coords = Enumerable.Range(0, 9)
+            .SelectMany(r => Enumerable.Range(0, 9).Select(c => (r, c)))
+            .OrderBy(_ => UnityEngine.Random.value)
+            .ToList();
+
+        int removed = 0;
+        foreach (var (r, c) in coords)
         {
-            if (grid[row, i] == number || grid[i, col] == number)
-                return false;
+            if (removed >= toRemove) break;
+            int backup = solutionGrid[r, c];
+            solutionGrid[r, c] = 0;
+
+            int sols = CountSolutions(solutionGrid, 2);
+            if (sols == 1)
+                removed++;
+            else
+                solutionGrid[r, c] = backup;
         }
+    }
 
-        int startRow = (row / 3) * 3;
-        int startCol = (col / 3) * 3;
+    int CountSolutions(int[,] grid, int limit)
+    {
+        // klónozzuk a rácsot, hogy ne piszkáljuk a főgridet
+        int[,] clone = (int[,])grid.Clone();
+        return CountSolutionsRec(clone, limit);
+    }
 
-        for (int i = 0; i < 3; i++)
+    int CountSolutionsRec(int[,] g, int limit)
+    {
+        // Keressünk egy üres cellát
+        int er = -1, ec = -1;
+        bool found = false;
+        for (int r = 0; r < 9 && !found; r++)
+            for (int c = 0; c < 9; c++)
+                if (g[r, c] == 0)
+                {
+                    er = r; ec = c;
+                    found = true;
+                    break;
+                }
+
+        if (!found)
+            return 1;  // pöccre megvan egy megoldás
+
+        int total = 0;
+        for (int n = 1; n <= 9; n++)
         {
-            for (int j = 0; j < 3; j++)
+            if (IsSafeToPlace(g, er, ec, n))
             {
-                if (grid[startRow + i, startCol + j] == number)
-                    return false;
+                g[er, ec] = n;
+                total += CountSolutionsRec(g, limit);
+                g[er, ec] = 0;  // visszaállítás
+
+                if (total >= limit)
+                    return total;
             }
         }
+        return total;
+    }
+
+    bool IsSafeToPlace(int[,] g, int rr, int cc, int num)
+    {
+        for (int i = 0; i < 9; i++)
+            if ((i != cc && g[rr, i] == num) ||
+                (i != rr && g[i, cc] == num))
+                return false;
+
+        int br = (rr / 3) * 3, bc = (cc / 3) * 3;
+        for (int r = br; r < br + 3; r++)
+            for (int c = bc; c < bc + 3; c++)
+                if ((r != rr || c != cc) && g[r, c] == num)
+                    return false;
 
         return true;
     }
 
-    private void Shuffle(List<int> list)
+    void CreateSudokuUI()
     {
-        for (int i = list.Count - 1; i > 0; i--)
-        {
-            int randomIndex = Random.Range(0, i + 1);
-            (list[i], list[randomIndex]) = (list[randomIndex], list[i]);
-        }
-    }
+        foreach (Transform ch in sudokuGridParent) Destroy(ch.gameObject);
 
-    private void RemoveNumbers(int cellsToRemove)
-    {
-        int removed = 0;
-
-        while (removed < cellsToRemove)
-        {
-            int row = Random.Range(0, 9);
-            int col = Random.Range(0, 9);
-
-            if (sudokuGrid[row, col] != 0)
+        for (int r = 0; r < 9; r++)
+            for (int c = 0; c < 9; c++)
             {
-                sudokuGrid[row, col] = 0;
-                isGeneratedCell[row, col] = false; // Ez a mező most már felhasználó által módosítható
-                removed++;
-            }
-        }
-    }
+                var go = Instantiate(cellPrefab, sudokuGridParent);
+                var inp = go.GetComponent<TMP_InputField>();
+                var img = go.GetComponent<Image>();
 
-    private void CreateSudokuUI()
-    {
-        foreach (Transform child in sudokuGridParent)
-        {
-            Destroy(child.gameObject);
-        }
-
-        for (int row = 0; row < 9; row++)
-        {
-            for (int col = 0; col < 9; col++)
-            {
-                GameObject cell = Instantiate(cellPrefab, sudokuGridParent);
-                TMP_InputField inputField = cell.GetComponent<TMP_InputField>();
-
-                if (inputField == null)
+                if (solutionGrid[r, c] != 0)
                 {
-                    Debug.LogError("A CellPrefab nem tartalmaz TMP_InputField komponenst!");
-                    continue;
-                }
-
-                if (sudokuGrid[row, col] != 0)
-                {
-                    inputField.text = sudokuGrid[row, col].ToString();
-                    inputField.interactable = false;
-                    inputField.image.color = Color.white;
-                    isGeneratedCell[row, col] = true; // Ez egy alapból generált mező
+                    inp.text = solutionGrid[r, c].ToString();
+                    inp.interactable = false;
+                    img.color = Color.white;
+                    isGeneratedCell[r, c] = true;
                 }
                 else
                 {
-                    inputField.text = "";
-                    inputField.interactable = true;
-                    isGeneratedCell[row, col] = false; // Ez egy szerkeszthető mező
-
-                    int currentRow = row;
-                    int currentCol = col;
-
-                    inputField.onValueChanged.AddListener((value) =>
-                    {
-                        HandleValueChange(inputField, currentRow, currentCol, value);
-                    });
-
-                    inputField.onEndEdit.AddListener((value) =>
-                    {
-                        ValidateUserInput(inputField, currentRow, currentCol, value);
-                    });
+                    inp.text = "";
+                    inp.interactable = true;
+                    isGeneratedCell[r, c] = false;
+                    int rr = r, cc = c;
+                    inp.onValueChanged.AddListener(_ => HandleValue(rr, cc, inp));
+                    inp.onEndEdit.AddListener(_ => ValidateInput(rr, cc, inp));
                 }
             }
+    }
+
+    void HandleValue(int r, int c, TMP_InputField f)
+    {
+        if (string.IsNullOrWhiteSpace(f.text))
+        {
+            solutionGrid[r, c] = 0;
+            f.image.color = Color.white;
         }
     }
 
-    private void HandleValueChange(TMP_InputField inputField, int row, int col, string value)
+    void ValidateInput(int r, int c, TMP_InputField f)
     {
-        if (string.IsNullOrWhiteSpace(value))
+        if (int.TryParse(f.text, out int n) && n >= 1 && n <= 9
+            && IsSafeToPlace(solutionGrid, r, c, n))
         {
-            sudokuGrid[row, col] = 0;
-            inputField.image.color = Color.white; // Fehérré tesszük, ha törölték
-        }
-    }
-
-    private void ValidateUserInput(TMP_InputField inputField, int row, int col, string value)
-    {
-        if (int.TryParse(value, out int number) && number >= 1 && number <= 9)
-        {
-            if (IsSafeToPlace(sudokuGrid, row, col, number))
-            {
-                sudokuGrid[row, col] = number;
-                inputField.image.color = Color.white; // Helyes input
-            }
-            else
-            {
-                inputField.image.color = Color.red; // Hibás input
-                IncrementErrorCount(); // Növeljük a hibák számát
-            }
+            solutionGrid[r, c] = n;
+            f.image.color = Color.white;
+            CheckCompletion();
         }
         else
         {
-            inputField.image.color = Color.red; // Nem érvényes szám
-            IncrementErrorCount(); // Növeljük a hibák számát
+            f.image.color = Color.red;
+            errorCount++;
+            UpdateErrorCounter();
         }
     }
 
-    private void IncrementErrorCount()
+    void UpdateErrorCounter() =>
+        errorCounterText.text = $"Hibák száma: {errorCount}";
+
+    void CheckCompletion()
     {
-        errorCount++; // Növeljük a hibák számát
-        UpdateErrorCounter(); // Frissítjük az UI-t
+        for (int r = 0; r < 9; r++)
+            for (int c = 0; c < 9; c++)
+                if (solutionGrid[r, c] == 0
+                 || !IsSafeToPlace(solutionGrid, r, c, solutionGrid[r, c]))
+                    return;
+
+        float elapsed = Time.time - startTime;
+        var metrics = new GameMetrics(
+            "Sudoku", elapsed, 81, errorCount, difficulty);
+        ScoreManager.Instance?.OnGameFinished(metrics);
+        DataManager.Instance.MarkFinished(MiniGameTrigger.CurrentMiniGameId);
+
+        ModalManager.Show(
+            "Gratulálok!",
+            $"Megoldva {elapsed:F1} mp alatt\nHibák: {errorCount}",
+            new[] { new ModalButton { Text = "OK", Callback = BackToMainGame } }
+        );
     }
 
-    private void UpdateErrorCounter()
+    void BackToMainGame()
     {
-        errorCounterText.text = $"Hibák száma: {errorCount}"; // Hibaszám megjelenítése
+        SceneManager.LoadScene(SceneManager.GetActiveScene().buildIndex - 2);
     }
 }

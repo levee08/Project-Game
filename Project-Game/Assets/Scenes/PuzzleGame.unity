@@ -255,13 +255,19 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   bgImage: {fileID: 21300000, guid: c6dba3f35b97e31478586776df38b4c2, type: 3}
-  btns: []
+  cardPrefab: {fileID: 6144573222138688429, guid: d87552b806fa6bf4094bee8247c897fc, type: 3}
+  grid: {fileID: 1531024960}
   puzzles:
   - {fileID: 21300000, guid: 8699521d4f995af4eae62e6e0816e2df, type: 3}
   - {fileID: 21300000, guid: 8438de3a6895e23468fa5be35fee7086, type: 3}
   - {fileID: 21300000, guid: 01f03227500c36d4a87e1fb372848258, type: 3}
   - {fileID: 21300000, guid: 103e25b577f46dc4daccd9592231f89a, type: 3}
-  gamePuzzles: []
+  - {fileID: -1763521911, guid: d72473571e1b7574589b7b64f943a265, type: 3}
+  - {fileID: 1536400888, guid: d72473571e1b7574589b7b64f943a265, type: 3}
+  - {fileID: -2084040774, guid: d72473571e1b7574589b7b64f943a265, type: 3}
+  - {fileID: 529040029, guid: d72473571e1b7574589b7b64f943a265, type: 3}
+  - {fileID: 294296899, guid: d72473571e1b7574589b7b64f943a265, type: 3}
+  - {fileID: 469518214, guid: d72473571e1b7574589b7b64f943a265, type: 3}
 --- !u!1 &816058448
 GameObject:
   m_ObjectHideFlags: 0
@@ -298,7 +304,7 @@ RectTransform:
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
   m_AnchorMin: {x: 0.5, y: 0.5}
   m_AnchorMax: {x: 0.5, y: 0.5}
-  m_AnchoredPosition: {x: 620.74, y: 305.36}
+  m_AnchoredPosition: {x: 554, y: 309}
   m_SizeDelta: {x: 160, y: 46.86}
   m_Pivot: {x: 0.5, y: 0.5}
 --- !u!114 &816058450
@@ -654,7 +660,7 @@ RectTransform:
   m_GameObject: {fileID: 1531024958}
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
   m_LocalPosition: {x: 0, y: 0, z: 0}
-  m_LocalScale: {x: 1.51, y: 1.51, z: 1}
+  m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
   m_Father: {fileID: 1694487267}
@@ -677,17 +683,17 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   m_Padding:
-    m_Left: 0
-    m_Right: 0
-    m_Top: 0
-    m_Bottom: 0
+    m_Left: 30
+    m_Right: 30
+    m_Top: 30
+    m_Bottom: 30
   m_ChildAlignment: 4
   m_StartCorner: 0
   m_StartAxis: 0
   m_CellSize: {x: 100, y: 100}
-  m_Spacing: {x: 10, y: 60}
+  m_Spacing: {x: 20, y: 60}
   m_Constraint: 1
-  m_ConstraintCount: 4
+  m_ConstraintCount: 5
 --- !u!114 &1531024961
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -885,7 +891,6 @@ GameObject:
   - component: {fileID: 2032370801}
   - component: {fileID: 2032370800}
   - component: {fileID: 2032370799}
-  - component: {fileID: 2032370802}
   - component: {fileID: 2032370803}
   m_Layer: 0
   m_Name: Main Camera
@@ -968,18 +973,6 @@ Transform:
   m_Children: []
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
---- !u!114 &2032370802
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 2032370798}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: fd11c482e691bf1478fb2da6b3548af8, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: 
 --- !u!114 &2032370803
 MonoBehaviour:
   m_ObjectHideFlags: 0

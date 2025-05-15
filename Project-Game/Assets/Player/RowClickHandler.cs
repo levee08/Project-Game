@@ -1,60 +1,76 @@
-﻿using Assets.Player;
-using Gravitons.UI.Modal;
-using TMPro;
+﻿// RowClickHandler.cs
 using UnityEngine;
 using UnityEngine.UI;
+using TMPro;
+using Gravitons.UI.Modal;
+using CognitiveGames.Scoring;
+using System.Linq;
 
 public class RowClickHandler : MonoBehaviour
 {
-    private string playerName;
-    private string playerScore;
-    private string playerCustomID;
-   
+    int playerCustomID;
+    string playerName;
+    string playerScore;
 
-    [SerializeField] private TextMeshProUGUI nameText; // Inspectorban állítsd be
-    [SerializeField] private TextMeshProUGUI scoreText; // Inspectorban állítsd be
+    [SerializeField] TMP_Text nameText;
+    [SerializeField] TMP_Text scoreText;
 
     public void Initialize(string name, string score, string customID)
     {
-        Debug.Log($"Initialize hívva. Adatok: Név: {name}, Pontszám: {score}, Egyedi azonosító: {customID}");
-
-        // Adatok mentése
         playerName = name;
         playerScore = score;
-        playerCustomID = customID;
+        playerCustomID = int.Parse(customID);
 
-        // Szövegek frissítése
-        if (nameText != null) nameText.text = name;
-        if (scoreText != null) scoreText.text = score;
+        nameText.text = name;
+        scoreText.text = score;
 
-        // Gomb esemény hozzárendelése
-        Button button = GetComponentInChildren<Button>();
-        if (button != null)
+        var btn = GetComponentInChildren<Button>();
+        btn.onClick.RemoveAllListeners();
+        btn.onClick.AddListener(OnRowClicked);
+    }
+
+    void OnRowClicked()
+    {
+        // 1) A rekord lekérése DB-ből
+        var record = DatabaseManager.Instance.GetPlayerByPlayerId(playerCustomID);
+        if (record == null)
         {
-            button.onClick.RemoveAllListeners(); // Előző események törlése
-            button.onClick.AddListener(OnRowClicked); // Új esemény hozzáadása
-            Debug.Log("Button esemény sikeresen hozzárendelve.");
+            Debug.LogError($"PlayerRecord not found for playerId={playerCustomID}");
+            return;
+        }
+        // 2) Átmásoljuk in-memory PlayerData-ba
+        var pd = DataManager.Instance.playerData;
+        pd.playerId = record.PlayerId;
+        pd.playerName = record.Name;
+        pd.playerAge = record.Age;
+        pd.attentionScore = record.AttentionScore;
+        pd.logicScore = record.LogicScore;
+        pd.visualScore = record.VisualScore;
+        pd.problemSolvingScore = record.ProblemSolvingScore;
+        pd.totalScore = record.TotalScore;
+        pd.lastPlayed = record.LastPlayed;
+        // ha voltak korábbi eredmények:
+        pd.gameResults.Clear();
+
+        // 3) Frissítjük a ScoreManager referenciáját is
+        ScoreManager.Instance.CurrentPlayer = pd;
+        var results = DatabaseManager.Instance
+                      .GetResultsForPlayerRecordId(record.Id);
+        if (results.Length == 0)
+        {
+            ModalManager.Show("Eredmények", "Ehhez a játékoshoz még nincs mentett eredmény.",
+                new[] { new ModalButton { Text = "OK" } });
         }
         else
         {
-            Debug.LogError("Hiba: Button komponens nem található!");
+            // összeállítjuk a szöveget
+            var lines = results.Select(r =>
+                $"{r.PlayedAt:yyyy.MM.dd} — {r.GameName}: {r.Score} pont, " +
+                $"{r.Mistakes} hiba, {r.Duration:F1}s");
+            string body = string.Join("\n", lines);
+
+            ModalManager.Show("Játékeredmények", body,
+                new[] { new ModalButton { Text = "OK" } });
         }
-    }
-
-    private void OnRowClicked()
-    {
-        if (string.IsNullOrEmpty(playerName) || string.IsNullOrEmpty(playerScore) || string.IsNullOrEmpty(playerCustomID))
-        {
-            Debug.LogError("Hiba: Az adatok még nincsenek inicializálva!");
-            return; // Ne folytasd, ha nincsenek adatok
-        }
-        SelectedPlayerData.PlayerName = playerName;
-        SelectedPlayerData.PlayerScore = playerScore;
-        SelectedPlayerData.PlayerCustomID = playerCustomID;
-
-        Debug.Log($"Gombra kattintottak! Név: {playerName}, Pontszám: {playerScore}, Egyedi azonosító: {playerCustomID}");
-
-        ModalManager.Show("Játékos adatai", $"Név: {playerName}\nPontszám: {playerScore}\nAzonosító: {playerCustomID}",
-            new[] { new ModalButton() { Text = "Ok" } });
     }
 }
